@@ -1,0 +1,43 @@
+networks:
+  cloudflared-net:
+    external: true
+  pizzaai-net:
+    driver: bridge
+
+services:
+  pizzaai-backend:
+    container_name: pizzaai-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    networks:
+      - cloudflared-net
+      - pizzaai-net
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
+      - ASPNETCORE_URLS=http://+:8080
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  pizzaai-frontend:
+    container_name: pizzaai-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    networks:
+      - cloudflared-net
+      - pizzaai-net
+    volumes:
+      - ./frontend:/app
+      - node_modules:/app/node_modules
+    command: ng serve --host 0.0.0.0 --port 4200 --configuration=production
+    environment:
+      - NODE_ENV=production
+
+volumes:
+  node_modules:

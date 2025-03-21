@@ -68,8 +68,7 @@ namespace PizzaAI
                     return Results.Ok(new
                     {
                         success = true,
-                        pizzaId = suggestion.Id,
-                        pizzaName = suggestion.Nom
+                        pizza = suggestion
                     });
                 }
                 catch (Exception ex)
@@ -82,7 +81,11 @@ namespace PizzaAI
                         Detail = ex.Message
                     });
                 }
-            });
+            })
+            .RequireCors("AllowAngular")
+            .Produces<ProblemDetails>(StatusCodes.Status500InternalServerError)
+            .Produces(StatusCodes.Status200OK)
+            .WithOpenApi();
             //.RequireAuthorization(); // Enforce authorization here
 
             return app;

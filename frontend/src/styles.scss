@@ -1,7 +1,7 @@
-@import "@angular/material/prebuilt-themes/indigo-pink.css";
 @import "tailwindcss";
 @import "tailwindcss/utilities";
-@import "@angular/material/prebuilt-themes/cyan-orange.css";
+/*@import "@angular/material/prebuilt-themes/cyan-orange.css";*/
+@import "@angular/material/prebuilt-themes/indigo-pink.css";
 
 html,
 body {
@@ -10,4 +10,12 @@ body {
 body {
 	margin: 0;
 	font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+.mat-body p,
+.mat-body-2 p,
+.mat-typography .mat-body p,
+.mat-typography .mat-body-2 p,
+.mat-typography p {
+	margin: 0;
 }

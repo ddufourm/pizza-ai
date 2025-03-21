@@ -1,7 +1,10 @@
 using PizzaAI;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-//using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authentication.Negotiate;
+
+[assembly: ApiController]
 
 DotNetEnv.Env.Load();
 
@@ -15,22 +18,53 @@ builder.Services.Configure<JsonSerializerOptions>(options =>
 });
 
 // Configuration des services d'authentification
-/*builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
     .AddNegotiate();
-builder.Services.AddAuthorization();*/
+builder.Services.AddAuthorization();
 
 // Add services to the container.
 builder.Services.AddOpenApi();
 
+var corsOrigins = builder.Environment.IsDevelopment()
+    ? Environment.GetEnvironmentVariable("CORS_ORIGINS_DEV")?.Split(',')
+    : Environment.GetEnvironmentVariable("CORS_ORIGINS_PROD")?.Split(',');
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.WithOrigins(corsOrigins ?? Array.Empty<string>())
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials() // Ajout crucial pour les requêtes authentifiées
+            .SetPreflightMaxAge(TimeSpan.FromSeconds(1800)); // Cache des pré-vérifications
     });
 });
+
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.SuppressModelStateInvalidFilter = true; // Désactive la validation automatique si gérée manuellement
+});
+
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(e => e.Value.Errors.Count > 0)
+                .ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value.Errors.Select(e => e.ErrorMessage).ToArray()
+                );
+
+            return new BadRequestObjectResult(new
+            {
+                Code = "VALIDATION_ERROR",
+                Message = "Erreur de validation des données",
+                Errors = errors
+            });
+        };
+    });
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -39,18 +73,20 @@ builder.Services.AddControllers()
     });
 
 var app = builder.Build();
+app.UseRouting();
 app.UseCors("AllowAngular");
-//app.UseAuthentication();
-//app.UseAuthorization();
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
-app.UseHttpsRedirection();
+else
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAIRequest();
-
 app.Run();
