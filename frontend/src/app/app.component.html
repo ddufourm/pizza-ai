@@ -22,12 +22,28 @@
 				mat-raised-button
 				color="primary"
 				type="submit"
-				[disabled]="!form.valid"
+				[disabled]="!form.valid || isLoading"
 				class="w-full"
 			>
-				Soumettre
+				{{ isLoading ? 'Chargement...' : 'Soumettre' }}
 			</button>
 		</form>
+		<!-- Add response message -->
+		<div *ngIf="responseMessage" class="mt-4 p-3 bg-green-100 text-green-700 rounded">
+			{{ responseMessage }}
+		</div>
+		<section class="flex justify-center w-full mt-10">
+			<article *ngIf="pizza.id" class="flex flex-col items-center gap-1">
+				<img
+					src="{{ pizza.image }}"
+					alt="{{ pizza.name }}"
+					class="w-[200px] h-[200px] object-cover"
+				/>
+				<h3 class="text-xl font-bold m-0">{{ pizza.name }}</h3>
+				<p class="text-center m-0">{{ pizza.price }}</p>
+				<button mat-raised-button color="accent" type="submit" class="w-full">Payer</button>
+			</article>
+		</section>
 	</div>
 </main>
 

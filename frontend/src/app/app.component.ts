@@ -1,3 +1,6 @@
+/**
+ * External dependencies
+ */
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -5,9 +8,13 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 
+/**
+ * Internal dependencies
+ */
 import { environment } from '../environments/environment';
+import { Pizza } from '../models/pizza.model';
 
 @Component({
 	selector: 'app-root',
@@ -24,9 +31,11 @@ import { environment } from '../environments/environment';
 	styleUrl: './app.component.scss',
 })
 export class AppComponent {
-	title = 'PizaAI';
-
+	title = 'PizzaAI';
 	form: FormGroup;
+	responseMessage: string = '';
+	pizza: Pizza = new Pizza();
+	isLoading: boolean = false;
 
 	constructor(private fb: FormBuilder, private http: HttpClient) {
 		this.form = this.fb.group({
@@ -36,21 +45,32 @@ export class AppComponent {
 
 	onSubmit() {
 		if (this.form.valid) {
+			this.isLoading = true;
+			this.responseMessage = '';
 			const emotionData = {
 				text: this.form.get('textInput')?.value,
 				timestamp: new Date().toISOString(),
 			};
 
+			console.log(environment);
 			this.http
-				.post<any>(`${environment.apiUrl}/pizza/pizza-suggestion`, emotionData)
+				.post<any>(`${environment.apiUrl}/pizza/pizza-suggestion`, emotionData, {
+					headers: new HttpHeaders({
+						'Content-Type': 'application/json',
+						'X-Requested-With': 'XMLHttpRequest',
+					}),
+				})
 				.subscribe({
 					next: (response) => {
 						console.log('Réponse du backend:', response);
-						// Traiter la réponse (redirection/affichage)
+						this.pizza = response.pizza;
+						this.isLoading = false;
 					},
 					error: (err) => {
 						console.error('Erreur:', err);
-						// Gérer les erreurs
+						this.responseMessage =
+							"Une erreur s'est produite lors de la suggestion de pizza.";
+						this.isLoading = false;
 					},
 				});
 		}
