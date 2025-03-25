@@ -25,6 +25,15 @@ RUN dotnet publish "backend.csproj" -c Release -o /app/publish \
     --self-contained true
 
 FROM base AS final
+
+USER root
+
+RUN mkdir -p /app/certs && \
+    chown -R app:app /app && \
+    chmod 755 /app/certs
+
+USER app
+
 WORKDIR /app
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "backend.dll"]
