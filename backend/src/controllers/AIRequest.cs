@@ -9,14 +9,14 @@ namespace PizzaAI
 {
     public static class AIRequest
     {
-        public static WebApplication UseAIRequest(this WebApplication app)
+        public static WebApplication UseAIRequest(this WebApplication app, IConfiguration configuration)
         {
             app.MapPost("/api/pizza/pizza-suggestion", async ([FromBody] PizzaRequest request) =>
             {
                 try
                 {
                     // Get the API key from the environment variables
-                    string apiKey = Environment.GetEnvironmentVariable("OPENAI_KEY") ?? throw new InvalidOperationException("API_KEY environment variable is not set.");
+                    string apiKey = Environment.GetEnvironmentVariable("OPENAI_KEY") ?? configuration["OPENAI_KEY"] ?? throw new InvalidOperationException("API_KEY environment variable is not set.");
                     // Create a new HttpClient instance and add the Authorization header
                     using var client = new HttpClient();
                     client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");

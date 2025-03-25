@@ -13,10 +13,22 @@ services:
     networks:
       - cloudflared-net
       - pizzaai-net
+    volumes:
+      - pizzaai_dataprotection:/app/data-protection-keys
+      - ./certificates:/app/certs
+    user: '1000:1000'
+    secrets:
+      - source: cert_password
+        target: CERT_PASSWORD
+      - source: openai_key
+        target: OPENAI_KEY
     environment:
+      - CERT_PATH=/app/certs
       - DOTNET_ENVIRONMENT=Production
       - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ALLOWEDHOSTS=pizzaai.jesuisdavid.dev
       - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
+      - CORS_ORIGINS=https://pizzaai.jesuisdavid.dev,https://api-pizzaai.jesuisdavid.dev
       - ASPNETCORE_URLS=http://+:8080
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
@@ -41,3 +53,10 @@ services:
 
 volumes:
   node_modules:
+  pizzaai_dataprotection:
+
+secrets:
+  cert_password:
+    file: ./secrets/cert_password.txt # Fichier non versionné
+  openai_key:
+    file: ./secrets/openai_key.txt # Fichier non versionné
