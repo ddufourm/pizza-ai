@@ -24,40 +24,23 @@ if (!builder.Environment.IsDevelopment())
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     // Listen on all interfaces on the specified port
-    // Listen on all interfaces on the specified port
-    serverOptions.ListenAnyIP(int.Parse(Environment.GetEnvironmentVariable("PORT") ?? "5205"), listenOptions =>
-    {
-        // Use HTTPS in production
-        if (!builder.Environment.IsDevelopment())
-        {
-            listenOptions.UseHttps("/app/certs/certificate.pfx", builder.Configuration["CERT_PASSWORD"] ?? throw new InvalidOperationException("Aucun mot de passe certificat configuré en production !"));
-        }
-    });
-
+    serverOptions.ListenAnyIP(int.Parse(Environment.GetEnvironmentVariable("PORT") ?? "5205"));
     // Limit the request body size to 50 MB in production
-    if (!builder.Environment.IsDevelopment())
-    {
-        serverOptions.Limits.MaxRequestBodySize = 52428800; // 50 MB
-    }
+    serverOptions.Limits.MaxRequestBodySize = 52428800; // 50 MB
 });
 
 // Add https informations in production
 if (!builder.Environment.IsDevelopment())
 {
-    // Force charging the HTTPS redirection middleware
-    builder.Services.AddHttpsRedirection(options =>
-    {
-        options.HttpsPort = 443;
-    });
-
     try
     {
         // Load the certificate from the file
         var certPath = Environment.GetEnvironmentVariable("CERT_PATH");
         var certPassword = builder.Configuration["CERT_PASSWORD"];
-        var certificate = X509Certificate2.CreateFromEncryptedPemFile(
-            certPath!,
-            certPassword!
+        var certificate = X509CertificateLoader.LoadPkcs12FromFile(
+            Path.Combine(certPath!, "certificate.pfx"),
+            certPassword!,
+            X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet
         );
 
         // Configure the data protection with the certificate
@@ -161,6 +144,11 @@ var app = builder.Build();
 // Configure the HTTP request pipeline in production.
 if (!app.Environment.IsDevelopment())
 {
+    app.Use((context, next) =>
+    {
+        context.Request.Scheme = "https"; // Force le schéma HTTPS
+        return next();
+    });
     app.UseForwardedHeaders();
 }
 // Add Routing, the CORS policy and the authentication and authorization middlewares

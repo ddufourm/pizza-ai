@@ -8,8 +8,8 @@ services:
   pizzaai-backend:
     container_name: pizzaai-backend
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./backend/Dockerfile
     networks:
       - cloudflared-net
       - pizzaai-net

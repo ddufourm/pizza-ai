@@ -1,20 +1,24 @@
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS base
 USER root
 
-RUN apk add --no-cache icu-libs && \
+RUN apk add --no-cache icu-libs ca-certificates tzdata openssl && \
     rm -rf /var/cache/apk/*
+
+ENV TZ=America/Toronto
 
 RUN mkdir /app
 RUN mkdir /app/data-protection-keys
 RUN mkdir /app/certs
 
-COPY ./certificates /app/certs
+COPY certificates /app/certs
 
-RUN chown -R app:app /app
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
-    LC_ALL=en_US.UTF-8 \
-    LANG=en_US.UTF-8
+RUN chmod -R 777 /app/certs && \
+    chown -R app:app /app
+
+ENV LC_ALL=fr_CA.UTF-8 \
+    LANG=fr_CA.UTF-8
 
 USER app
 WORKDIR /app
@@ -22,10 +26,10 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
 USER root
 WORKDIR /src
-COPY ["backend.csproj", "."]
+COPY backend/backend.csproj .
 RUN dotnet restore "backend.csproj"
 RUN apk add --no-cache libc6-compat
-COPY . .
+COPY ./backend .
 RUN dotnet build "backend.csproj" -c Release -o /app/build
 
 FROM build AS publish
