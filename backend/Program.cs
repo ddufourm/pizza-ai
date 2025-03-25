@@ -9,23 +9,41 @@ using System.Security.Cryptography.X509Certificates;
 
 [assembly: ApiController]
 
+// Load the environment variables (from .env file in development)
 DotNetEnv.Env.Load();
 
+// Create the builder
 var builder = WebApplication.CreateBuilder(args);
+
+// Load the secrets from the Docker secrets in production
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Configuration.AddKeyPerFile("/run/secrets", optional: true, reloadOnChange: true);
+}
+
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    serverOptions.ListenAnyIP(builder.Environment.IsDevelopment() ? 5205 : 8080);
+    // Listen on all interfaces on the specified port
+    serverOptions.ListenAnyIP(int.Parse(Environment.GetEnvironmentVariable("PORT") ?? "5205"), listenOptions =>
+    {
+        // Use HTTPS in production
+        if (!builder.Environment.IsDevelopment())
+        {
+            listenOptions.UseHttps("/app/certs/certificate.pfx", builder.Configuration["CERT_PASSWORD"] ?? throw new InvalidOperationException("Aucun mot de passe certificat configuré en production !"));
+        }
+    });
+
+    // Limit the request body size to 50 MB in production
     if (!builder.Environment.IsDevelopment())
     {
         serverOptions.Limits.MaxRequestBodySize = 52428800; // 50 MB
     }
 });
 
+// Add https informations in production
 if (!builder.Environment.IsDevelopment())
 {
-    builder.Configuration.AddKeyPerFile("/run/secrets", optional: true, reloadOnChange: true);
-
-    // Forcer le chargement de la configuration HTTPS
+    // Force charging the HTTPS redirection middleware
     builder.Services.AddHttpsRedirection(options =>
     {
         options.HttpsPort = 443;
@@ -33,6 +51,7 @@ if (!builder.Environment.IsDevelopment())
 
     try
     {
+        // Load the certificate from the file
         var certPath = Environment.GetEnvironmentVariable("CERT_PATH");
         var certPassword = builder.Configuration["CERT_PASSWORD"];
         var certificate = X509Certificate2.CreateFromEncryptedPemFile(
@@ -40,6 +59,7 @@ if (!builder.Environment.IsDevelopment())
             certPassword!
         );
 
+        // Configure the data protection with the certificate
         builder.Services.AddDataProtection()
             .PersistKeysToFileSystem(new DirectoryInfo("/app/data-protection-keys"))
             .ProtectKeysWithCertificate(certificate)
@@ -48,9 +68,9 @@ if (!builder.Environment.IsDevelopment())
     }
     catch (Exception e)
     {
-        Console.WriteLine($"Erreur lors de la configuration du certificat : {e.Message}");
+        Console.WriteLine($"Error during certificate configuration : {e.Message}");
 
-        // Configurer une protection des données de base sans certificat
+        // Set the default data protection configuration without certificate
         builder.Services.AddDataProtection()
             .PersistKeysToFileSystem(new DirectoryInfo("/app/data-protection-keys"))
             .SetApplicationName("PizzaAI")
@@ -65,11 +85,10 @@ builder.Services.Configure<JsonSerializerOptions>(options =>
     options.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
 });
 
-// Configuration des services d'authentification
-builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
-    .AddNegotiate();
+// Set the authentication and authorization services
+builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
 builder.Services.AddAuthorization();
-
+// Add the x-forwarded-proto headers in production
 if (!builder.Environment.IsDevelopment())
 {
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -80,9 +99,10 @@ if (!builder.Environment.IsDevelopment())
     });
 }
 
-// Add services to the container.
+// Add OpenAPI service to the container.
 builder.Services.AddOpenApi();
 
+// Add the CORS policy
 var corsOrigins = Environment.GetEnvironmentVariable("CORS_ORIGINS")?.Split(',') ?? [];
 if (corsOrigins.Length == 0)
 {
@@ -95,54 +115,60 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials() // Ajout crucial pour les requêtes authentifiées
-            .SetPreflightMaxAge(TimeSpan.FromSeconds(1800)) // Cache des pré-vérifications
-            .WithExposedHeaders("Content-Disposition"); // Pour les téléchargements de fichiers
+            .AllowCredentials() // Crucial addition for authenticated requests
+            .SetPreflightMaxAge(TimeSpan.FromSeconds(1800)) // Pre-check cover
+            .WithExposedHeaders("Content-Disposition"); // For file downloads
     });
 });
 
+// Disables automatic validation if managed manually
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
-    options.SuppressModelStateInvalidFilter = true; // Désactive la validation automatique si gérée manuellement
+    options.SuppressModelStateInvalidFilter = true;
 });
 
-builder.Services.AddControllers()
-    .ConfigureApiBehaviorOptions(options =>
+// Set a return format for validation errors for API
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
     {
-        options.InvalidModelStateResponseFactory = context =>
+        var errors = context.ModelState
+            .Where(e => e.Value?.Errors?.Count > 0)
+            .ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value?.Errors?.Select(e => e.ErrorMessage).ToArray() ?? []
+            );
+
+        return new BadRequestObjectResult(new
         {
-            var errors = context.ModelState
-                .Where(e => e.Value?.Errors?.Count > 0)
-                .ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => kvp.Value?.Errors?.Select(e => e.ErrorMessage).ToArray() ?? []
-                );
+            Code = "VALIDATION_ERROR",
+            Message = "Erreur de validation des données",
+            Errors = errors
+        });
+    };
+});
 
-            return new BadRequestObjectResult(new
-            {
-                Code = "VALIDATION_ERROR",
-                Message = "Erreur de validation des données",
-                Errors = errors
-            });
-        };
-    });
+// Set the JSON serialization options
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.PropertyNamingPolicy = null;
+});
 
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.PropertyNamingPolicy = null;
-    });
-
+// Build the app
 var app = builder.Build();
+
+// Configure the HTTP request pipeline in production.
 if (!app.Environment.IsDevelopment())
 {
     app.UseForwardedHeaders();
 }
+// Add Routing, the CORS policy and the authentication and authorization middlewares
 app.UseRouting();
 app.UseCors("AllowAngular");
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Add the Options method for CORS pre-checks
 app.MapWhen(context => context.Request.Method == "OPTIONS", handleOptions =>
 {
     handleOptions.Run(async context =>
@@ -155,16 +181,19 @@ app.MapWhen(context => context.Request.Method == "OPTIONS", handleOptions =>
     });
 });
 
-
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    // Configure OpenAPI in development
     app.MapOpenApi();
 }
 else
 {
+    // Configure HTTPS redirection in production
     app.UseHttpsRedirection();
 }
 
+// Add the AI request middleware
 app.UseAIRequest(builder.Configuration);
+
+// Run the app
 app.Run();

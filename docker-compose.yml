@@ -30,6 +30,7 @@ services:
       - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
       - CORS_ORIGINS=https://pizzaai.jesuisdavid.dev,https://api-pizzaai.jesuisdavid.dev
       - ASPNETCORE_URLS=http://+:8080
+      - PORT=8080
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
       interval: 30s
