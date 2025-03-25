@@ -15,8 +15,6 @@ services:
       - pizzaai-net
     volumes:
       - pizzaai_dataprotection:/app/data-protection-keys
-      - ./certificates:/app/certs
-    user: '1000:1000'
     secrets:
       - source: cert_password
         target: CERT_PASSWORD
@@ -24,18 +22,17 @@ services:
         target: OPENAI_KEY
     environment:
       - CERT_PATH=/app/certs
-      - DOTNET_ENVIRONMENT=Production
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_ALLOWEDHOSTS=pizzaai.jesuisdavid.dev
+      - ASPNETCORE_ALLOWEDHOSTS=api-pizzaai.jesuisdavid.dev
       - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
-      - CORS_ORIGINS=https://pizzaai.jesuisdavid.dev,https://api-pizzaai.jesuisdavid.dev
-      - ASPNETCORE_URLS=http://+:8080
+      - CORS_ORIGINS=https://pizzaai.jesuisdavid.dev
       - PORT=8080
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
       interval: 30s
       timeout: 10s
       retries: 3
+    user: 'app:app'
 
   pizzaai-frontend:
     container_name: pizzaai-frontend
@@ -58,6 +55,6 @@ volumes:
 
 secrets:
   cert_password:
-    file: ./secrets/cert_password.txt # Fichier non versionné
+    file: ./secrets/cert_password.txt
   openai_key:
-    file: ./secrets/openai_key.txt # Fichier non versionné
+    file: ./secrets/openai_key.txt

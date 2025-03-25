@@ -24,6 +24,7 @@ if (!builder.Environment.IsDevelopment())
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     // Listen on all interfaces on the specified port
+    // Listen on all interfaces on the specified port
     serverOptions.ListenAnyIP(int.Parse(Environment.GetEnvironmentVariable("PORT") ?? "5205"), listenOptions =>
     {
         // Use HTTPS in production
@@ -185,11 +186,6 @@ if (app.Environment.IsDevelopment())
 {
     // Configure OpenAPI in development
     app.MapOpenApi();
-}
-else
-{
-    // Configure HTTPS redirection in production
-    app.UseHttpsRedirection();
 }
 
 // Add the AI request middleware
