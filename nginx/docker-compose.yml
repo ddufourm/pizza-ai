@@ -1,14 +1,17 @@
 networks:
   cloudflared-net:
     external: true
+  pizzaai-net:
+    driver: bridge
 
 services:
-  pizzaai:
+  pizzaai-backend:
+    container_name: pizzaai-backend
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: ./backend/Dockerfile
     networks:
-      - cloudflared-net
+      - pizzaai-net
     volumes:
       - pizzaai_dataprotection:/app/data-protection-keys
     secrets:
@@ -17,7 +20,6 @@ services:
       - source: openai_key
         target: OPENAI_KEY
     environment:
-      - NODE_ENV=production
       - CERT_PATH=/app/certs
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_ALLOWEDHOSTS=pizzaai.jesuisdavid.dev
@@ -30,6 +32,19 @@ services:
       timeout: 10s
       retries: 3
     user: 'app:app'
+
+  pizzaai-frontend:
+    container_name: pizzaai-frontend
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    networks:
+      - cloudflared-net
+      - pizzaai-net
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - pizzaai-backend
 
 volumes:
   pizzaai_dataprotection:
