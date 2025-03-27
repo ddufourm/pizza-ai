@@ -16,7 +16,7 @@ builder.Services.Initialize(builder.Environment, builder.Configuration);
 // Build the app
 var app = builder.Build();
 // Charge automatically all APP settings
-app.Initialize(builder.Environment);
+app.Initialize(builder.Environment, builder.Configuration);
 // Charge automatically all API settings
 app.InitializeAPI(builder.Configuration);
 // Run the app

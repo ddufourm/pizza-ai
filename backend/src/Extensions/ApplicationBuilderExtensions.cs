@@ -5,17 +5,19 @@ namespace PizzaAI.Extensions;
 
 public static class ApplicationBuilderExtensions
 {
-    public static WebApplication Initialize(this WebApplication app, IWebHostEnvironment env)
+    public static WebApplication Initialize(this WebApplication app, IWebHostEnvironment env, IConfiguration config)
     {
         app.UseSecurityMiddlewarePipeline();
-        app.UseCustomStaticFiles(env);
+        app.UseCustomStaticFiles(env, config);
         app.MapSpaFallback(env);
         app.UseProductionSecurityHeaders(env);
+        app.SecureHiddenFilesAndFolder();
         app.SetMapOpenApi(env);
+        app.ConfigureHTTPStrictTransportSecurity(env);
 
         return app;
     }
-    public static WebApplication UseCustomStaticFiles(this WebApplication app, IWebHostEnvironment env)
+    public static WebApplication UseCustomStaticFiles(this WebApplication app, IWebHostEnvironment env, IConfiguration config)
     {
         if (env.IsDevelopment()) return app;
         var options = new StaticFileOptions
@@ -30,17 +32,58 @@ public static class ApplicationBuilderExtensions
             }
         };
         app.UseStaticFiles(options);
-        app.UseSecurityHeaders(env);
+        app.UseSecurityHeaders(env, config);
 
         return app;
     }
 
-    public static IApplicationBuilder UseSecurityHeaders(this WebApplication app, IWebHostEnvironment env)
+    public static IApplicationBuilder SecureHiddenFilesAndFolder(this WebApplication app)
+    {
+        app.Use(async (context, next) =>
+        {
+            string path = context.Request.Path.Value.ToLowerInvariant();
+
+            // Folders list to block
+            string[] blockedDirectories = { "/bitkeeper", "/.git", "/.svn" };
+
+            foreach (string dir in blockedDirectories)
+            {
+                if (path.StartsWith(dir))
+                {
+                    context.Response.StatusCode = 403; // Accès interdit
+                    await context.Response.WriteAsync("Access to this resource is forbidden.");
+                    return;
+                }
+            }
+
+            await next();
+        });
+        return app;
+    }
+
+    public static IApplicationBuilder UseSecurityHeaders(this WebApplication app, IWebHostEnvironment env, IConfiguration config)
     {
         if (env.IsDevelopment()) return app;
         return app.Use(async (context, next) =>
         {
-            context.Response.Headers.Append("Content-Security-Policy", "default-src 'self' https: 'unsafe-inline' 'unsafe-eval'");
+            string nonce = config["CSP_NONCE"] ?? "";
+            nonce = nonce.Trim();
+            string[] policies = {
+                $"style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com;",
+                $"script-src 'self' 'nonce-{nonce}';",
+                "img-src 'self' data: https://placehold.co;",
+                "font-src 'self' https://fonts.gstatic.com;",
+                "frame-ancestors 'none';",
+                "form-action 'self';",
+                "connect-src 'self';",
+                "media-src 'self';",
+                "frame-src 'self';",
+                "object-src 'none';",
+                "manifest-src 'self';",
+                "upgrade-insecure-requests;",
+                "block-all-mixed-content;"
+            };
+            context.Response.Headers.Append("Content-Security-Policy", string.Join(" ", policies));
             context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
             context.Response.Headers.Append("X-Frame-Options", "DENY");
             await next();
@@ -96,11 +139,10 @@ public static class ApplicationBuilderExtensions
 
     public static WebApplication SetMapOpenApi(this WebApplication app, IWebHostEnvironment env)
     {
-        if (env.IsDevelopment())
-        {
-            // Configure OpenAPI in development
-            app.MapOpenApi();
-        }
+        if (!env.IsDevelopment()) return app;
+        // Configure OpenAPI in development
+        app.MapOpenApi();
+
         return app;
     }
 
@@ -125,5 +167,14 @@ public static class ApplicationBuilderExtensions
 
             await Task.CompletedTask;
         });
+    }
+
+    public static IApplicationBuilder ConfigureHTTPStrictTransportSecurity(this WebApplication app, IWebHostEnvironment env)
+    {
+        if (env.IsDevelopment()) return app;
+        app.UseHsts();
+        app.UseHttpsRedirection();
+
+        return app;
     }
 }

@@ -1,7 +1,7 @@
 /**
  * External dependencies
  */
-import { Component } from '@angular/core';
+import { Component, ViewEncapsulation } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -15,6 +15,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
  */
 import { environment } from '../environments/environment';
 import { Pizza } from '../models/pizza.model';
+import { StyleObserverService } from '../services/observe.head';
 
 @Component({
 	selector: 'app-root',
@@ -28,7 +29,8 @@ import { Pizza } from '../models/pizza.model';
 		MatButtonModule,
 	],
 	templateUrl: './app.component.html',
-	styleUrl: './app.component.scss',
+	styleUrls: [],
+	encapsulation: ViewEncapsulation.None,
 })
 export class AppComponent {
 	title = 'PizzaAI';
@@ -37,7 +39,11 @@ export class AppComponent {
 	pizza: Pizza = new Pizza();
 	isLoading: boolean = false;
 
-	constructor(private fb: FormBuilder, private http: HttpClient) {
+	constructor(
+		private readonly styleObserverService: StyleObserverService,
+		private fb: FormBuilder,
+		private http: HttpClient
+	) {
 		this.form = this.fb.group({
 			textInput: ['', [Validators.required, Validators.maxLength(30)]],
 		});
@@ -52,7 +58,6 @@ export class AppComponent {
 				timestamp: new Date().toISOString(),
 			};
 
-			console.log(environment);
 			this.http
 				.post<any>(`${environment.apiUrl}/pizza/pizza-suggestion`, emotionData, {
 					headers: new HttpHeaders({
@@ -62,7 +67,6 @@ export class AppComponent {
 				})
 				.subscribe({
 					next: (response) => {
-						console.log('Réponse du backend:', response);
 						this.pizza = response.pizza;
 						this.isLoading = false;
 					},

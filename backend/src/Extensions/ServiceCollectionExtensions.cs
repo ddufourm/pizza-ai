@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.DataProtection;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace PizzaAI.Extensions;
 
@@ -26,6 +27,7 @@ public static class ServiceCollectionExtensions
         services.ConfigureApiBehaviorOptions();
         services.ConfigureCustomApiBehavior();
         services.AddJsonOptions();
+        services.ConfigureHTTPStrictTransportSecurity(environment);
         return services;
     }
 
@@ -177,5 +179,26 @@ public static class ServiceCollectionExtensions
         {
             options.JsonSerializerOptions.PropertyNamingPolicy = null;
         }).Services;
+    }
+
+    public static IServiceCollection ConfigureHTTPStrictTransportSecurity(
+        this IServiceCollection services,
+        IWebHostEnvironment environment
+    )
+    {
+        if (environment.IsDevelopment()) return services;
+        services.AddHsts(options =>
+        {
+            options.Preload = true;
+            options.IncludeSubDomains = true;
+            options.MaxAge = TimeSpan.FromDays(365);
+        });
+        services.AddHttpsRedirection(options =>
+        {
+            options.RedirectStatusCode = StatusCodes.Status308PermanentRedirect;
+            options.HttpsPort = 443;
+        });
+
+        return services;
     }
 }

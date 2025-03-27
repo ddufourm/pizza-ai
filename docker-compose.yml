@@ -1,4 +1,4 @@
-networks:
+﻿networks:
   cloudflared-net:
     external: true
 
@@ -8,11 +8,15 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile
+      args:
+        CSP_NONCE: ${CSP_NONCE}
     networks:
       - cloudflared-net
     volumes:
       - pizzaai_dataprotection:/app/data-protection-keys
     secrets:
+      - source: csp_nonce
+        target: CSP_NONCE
       - source: cert_password
         target: CERT_PASSWORD
       - source: openai_key
@@ -36,6 +40,8 @@ volumes:
   pizzaai_dataprotection:
 
 secrets:
+  csp_nonce:
+    file: ./secrets/nonce.txt
   cert_password:
     file: ./secrets/cert_password.txt
   openai_key:

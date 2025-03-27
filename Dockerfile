@@ -45,6 +45,9 @@ WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY ./frontend .
+ARG CSP_NONCE
+RUN if [ -z "$CSP_NONCE" ]; then echo "CSP_NONCE is not set!" && exit 1; fi
+RUN sed -i "s|cspNonce: ''|cspNonce: '${CSP_NONCE}'|g" ./src/environments/environment.prod.ts
 RUN npm run build
 
 FROM base AS final
