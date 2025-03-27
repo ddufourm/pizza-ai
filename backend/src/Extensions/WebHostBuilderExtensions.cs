@@ -2,6 +2,11 @@ namespace PizzaAI.Extensions;
 
 public static class WebHostBuilderExtensions
 {
+    public static IWebHostBuilder Initialize(this IWebHostBuilder builder)
+    {
+        builder.ConfigureKestrelServer();
+        return builder;
+    }
     public static IWebHostBuilder ConfigureKestrelServer(this IWebHostBuilder builder)
     {
         return builder.ConfigureKestrel(serverOptions =>

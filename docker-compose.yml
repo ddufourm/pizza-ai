@@ -4,6 +4,7 @@ networks:
 
 services:
   pizzaai:
+    container_name: pizzaai
     build:
       context: .
       dockerfile: ./Dockerfile

@@ -3,56 +3,96 @@ using Microsoft.AspNetCore.HttpOverrides;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
-using System.Reflection;
+using Microsoft.AspNetCore.DataProtection;
+using System.Security.Cryptography.X509Certificates;
 
 namespace PizzaAI.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    private static readonly HashSet<string> InvokedMethods = new();
-    public static IServiceCollection AddAllExtensions(this IServiceCollection services, Assembly assembly)
+    public static IServiceCollection Initialize(
+        this IServiceCollection services,
+        IWebHostEnvironment environment,
+        IConfiguration config
+    )
     {
-        // Récupérer toutes les classes statiques dans l'assembly spécifié
-        var extensionMethods = assembly.GetTypes()
-            .Where(type => type.IsClass && type.IsAbstract && type.IsSealed) // Classes statiques
-            .SelectMany(type => type.GetMethods(BindingFlags.Static | BindingFlags.Public))
-            .Where(method => method.GetParameters().FirstOrDefault()?.ParameterType == typeof(IServiceCollection) &&
-            method.Name != nameof(AddAllExtensions)).ToList();
-
-        foreach (var method in extensionMethods)
-        {
-            if (InvokedMethods.Contains(method.Name))
-            {
-                Console.WriteLine($"Méthode déjà appelée : {method.Name}");
-                continue;
-            }
-
-            Console.WriteLine($"Appel de la méthode d'extension : {method.Name}");
-            // Vérifier si la méthode est une extension de IServiceCollection
-            if (method.ReturnType == typeof(IServiceCollection))
-            {
-                try
-                {
-                    // Appeler la méthode d'extension dynamiquement
-                    method.Invoke(null, new object[] { services });
-                    InvokedMethods.Add(method.Name);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Erreur lors de l'appel de la méthode '{method.Name}': {ex.Message}");
-                }
-            }
-        }
-
+        services.AddCustomCors();
+        services.AddSecureDataProtection(environment, config);
+        services.AddCustomAuthentication();
+        services.AddCustomuthorization();
+        services.InitializeOpenApi();
+        services.ConfigureForwardedHeadersOptions(environment);
+        services.ConfigureCustomJsonOptions();
+        services.ConfigureApiBehaviorOptions();
+        services.ConfigureCustomApiBehavior();
+        services.AddJsonOptions();
         return services;
     }
 
-    public static IServiceCollection AddCustomServices(this IServiceCollection services)
+    public static IServiceCollection AddCustomCors(this IServiceCollection services)
     {
-        return services
-            .AddControllers()
-            .AddApplicationPart(typeof(Program).Assembly)
-            .Services;
+        return services.AddCors(options =>
+        {
+            // Add the CORS policy
+            var corsOrigins = Environment.GetEnvironmentVariable("CORS_ORIGINS")?.Split(',') ?? [];
+            if (corsOrigins.Length == 0)
+            {
+                throw new InvalidOperationException("Aucune origine CORS configurée !");
+            }
+
+            options.AddPolicy("AllowAngular", policy =>
+            {
+                policy.WithOrigins(corsOrigins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials() // Crucial addition for authenticated requests
+                    .SetPreflightMaxAge(TimeSpan.FromSeconds(1800)) // Pre-check cover
+                    .WithExposedHeaders("Content-Disposition"); // For file downloads
+            });
+        });
+    }
+
+    public static IDataProtectionBuilder AddSecureDataProtection(
+        this IServiceCollection services,
+        IWebHostEnvironment env,
+        IConfiguration config)
+    {
+        // In development, use the default data protection configuration
+        if (env.IsDevelopment())
+        {
+            return services.AddDataProtection()
+                .SetApplicationName("PizzaAI")
+                .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+        }
+
+        try
+        {
+            // Load the certificate from the file
+            var certPath = Environment.GetEnvironmentVariable("CERT_PATH");
+            var certPassword = config["CERT_PASSWORD"];
+            var certificate = X509CertificateLoader.LoadPkcs12FromFile(
+                Path.Combine(certPath!, "certificate.pfx"),
+                certPassword!,
+                X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet
+            );
+
+            // Configure the data protection with the certificate
+            return services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo("/app/data-protection-keys"))
+                .ProtectKeysWithCertificate(certificate)
+                .SetApplicationName("PizzaAI")
+                .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Error during certificate configuration : {e.Message}");
+
+            // Set the default data protection configuration without certificate
+            return services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo("/app/data-protection-keys"))
+                .SetApplicationName("PizzaAI")
+                .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+        }
     }
 
     public static IServiceCollection AddCustomAuthentication(this IServiceCollection services)
@@ -67,14 +107,14 @@ public static class ServiceCollectionExtensions
         return services.AddAuthorization();
     }
 
-    public static IServiceCollection AddOpenApi(this IServiceCollection services)
+    public static IServiceCollection InitializeOpenApi(this IServiceCollection services)
     {
         return services.AddOpenApi();
     }
 
-    public static IServiceCollection ConfigureForwardedHeadersOptions(this IServiceCollection services, WebApplicationBuilder builder)
+    public static IServiceCollection ConfigureForwardedHeadersOptions(this IServiceCollection services, IWebHostEnvironment environment)
     {
-        if (builder.Environment.IsDevelopment()) return services;
+        if (environment.IsDevelopment()) return services;
 
         // Configure the Forwarded Headers Middleware       
         services.Configure<ForwardedHeadersOptions>(options =>
@@ -138,9 +178,4 @@ public static class ServiceCollectionExtensions
             options.JsonSerializerOptions.PropertyNamingPolicy = null;
         }).Services;
     }
-}
-
-public class CorsSettings
-{
-    public required string[] AllowedOrigins { get; set; }
 }

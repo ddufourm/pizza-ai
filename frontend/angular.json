@@ -3,7 +3,7 @@
 	"version": 1,
 	"newProjectRoot": "projects",
 	"projects": {
-		"mon-projet-angular": {
+		"frontend": {
 			"projectType": "application",
 			"schematics": {
 				"@schematics/angular:component": {
@@ -17,7 +17,7 @@
 				"build": {
 					"builder": "@angular-devkit/build-angular:application",
 					"options": {
-						"outputPath": "dist/mon-projet-angular",
+						"outputPath": "dist/frontend",
 						"index": "src/index.html",
 						"browser": "src/main.ts",
 						"polyfills": ["zone.js"],
@@ -81,11 +81,11 @@
 					},
 					"configurations": {
 						"production": {
-							"buildTarget": "mon-projet-angular:build:production",
+							"buildTarget": "frontend:build:production",
 							"allowedHosts": ["pizzaai.jesuisdavid.dev", ".jesuisdavid.dev"]
 						},
 						"development": {
-							"buildTarget": "mon-projet-angular:build:development",
+							"buildTarget": "frontend:build:development",
 							"allowedHosts": [
 								"localhost",
 								"127.0.0.1",

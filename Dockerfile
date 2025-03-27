@@ -33,23 +33,23 @@ RUN apk add --no-cache libc6-compat
 COPY ./backend .
 RUN dotnet build "backend.csproj" -c Release -o /app/build
 
-FROM build AS publish
+FROM build AS backend
 USER root
 RUN dotnet publish "backend.csproj" -c Release -o /app/publish \
     --runtime linux-musl-x64 \
     --self-contained true && \
 	chown -R app:app /app/publish
 
-FROM node:22-alpine AS builder
+FROM node:22-alpine AS frontend
 WORKDIR /app
-COPY frontend/package.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY ./frontend .
-RUN npm run build -- --configuration production
+RUN npm run build
 
 FROM base AS final
 USER app
 WORKDIR /app
-COPY --from=publish --chown=app:app /app/publish .
-COPY --from=builder /app/dist/pizza-ai ./wwwroot
+COPY --from=backend --chown=app:app /app/publish .
+COPY --from=frontend --chown=app:app /app/dist/frontend/browser ./wwwroot
 ENTRYPOINT ["dotnet", "backend.dll"]

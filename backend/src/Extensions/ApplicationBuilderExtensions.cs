@@ -5,8 +5,19 @@ namespace PizzaAI.Extensions;
 
 public static class ApplicationBuilderExtensions
 {
-    public static IApplicationBuilder UseCustomStaticFiles(this IApplicationBuilder app, IWebHostEnvironment env)
+    public static WebApplication Initialize(this WebApplication app, IWebHostEnvironment env)
     {
+        app.UseSecurityMiddlewarePipeline();
+        app.UseCustomStaticFiles(env);
+        app.MapSpaFallback(env);
+        app.UseProductionSecurityHeaders(env);
+        app.SetMapOpenApi(env);
+
+        return app;
+    }
+    public static WebApplication UseCustomStaticFiles(this WebApplication app, IWebHostEnvironment env)
+    {
+        if (env.IsDevelopment()) return app;
         var options = new StaticFileOptions
         {
             FileProvider = new PhysicalFileProvider(Path.Combine(env.ContentRootPath, "wwwroot")),
@@ -18,12 +29,15 @@ public static class ApplicationBuilderExtensions
                 }
             }
         };
+        app.UseStaticFiles(options);
+        app.UseSecurityHeaders(env);
 
-        return app.UseStaticFiles(options).UseSecurityHeaders();
+        return app;
     }
 
-    public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder app)
+    public static IApplicationBuilder UseSecurityHeaders(this WebApplication app, IWebHostEnvironment env)
     {
+        if (env.IsDevelopment()) return app;
         return app.Use(async (context, next) =>
         {
             context.Response.Headers.Append("Content-Security-Policy", "default-src 'self' https: 'unsafe-inline' 'unsafe-eval'");
@@ -33,17 +47,18 @@ public static class ApplicationBuilderExtensions
         });
     }
 
-    public static IApplicationBuilder MapSpaFallback(
-        this IApplicationBuilder app)
+    public static IApplicationBuilder MapSpaFallback(this IApplicationBuilder app, IWebHostEnvironment env)
     {
+        if (env.IsDevelopment()) return app;
         return app.MapWhen(context =>
             !context.Request.Path.StartsWithSegments("/api"),
-            spa => spa.UseSpaFallback()
+            spa => spa.UseSpaFallback(env)
         );
     }
 
-    private static IApplicationBuilder UseSpaFallback(this IApplicationBuilder app)
+    private static IApplicationBuilder UseSpaFallback(this IApplicationBuilder app, IWebHostEnvironment env)
     {
+        if (env.IsDevelopment()) return app;
         app.UseStaticFiles();
         app.UseEndpoints(endpoints =>
         {
@@ -53,7 +68,7 @@ public static class ApplicationBuilderExtensions
         return app;
     }
 
-    public static IApplicationBuilder UseProductionSecurityHeaders(this IApplicationBuilder app, IHostEnvironment env)
+    public static WebApplication UseProductionSecurityHeaders(this WebApplication app, IHostEnvironment env)
     {
         if (env.IsDevelopment()) return app;
 
@@ -70,7 +85,7 @@ public static class ApplicationBuilderExtensions
         return app;
     }
 
-    public static IApplicationBuilder UseSecurityMiddlewarePipeline(this IApplicationBuilder app)
+    public static IApplicationBuilder UseSecurityMiddlewarePipeline(this WebApplication app)
     {
         return app
             .UseRouting()
@@ -79,7 +94,7 @@ public static class ApplicationBuilderExtensions
             .UseAuthorization();
     }
 
-    public static IApplicationBuilder SetMapOpenApi(this WebApplication app, IWebHostEnvironment env)
+    public static WebApplication SetMapOpenApi(this WebApplication app, IWebHostEnvironment env)
     {
         if (env.IsDevelopment())
         {
@@ -87,5 +102,28 @@ public static class ApplicationBuilderExtensions
             app.MapOpenApi();
         }
         return app;
+    }
+
+    public static IApplicationBuilder MapCorsPreflightRequests(this WebApplication app, string[] allowedOrigins)
+    {
+        return app.MapWhen(IsPreflightRequest, HandlePreflightRequests(allowedOrigins));
+    }
+
+    private static bool IsPreflightRequest(HttpContext context)
+    {
+        return context.Request.Method == "OPTIONS";
+    }
+
+    private static Action<IApplicationBuilder> HandlePreflightRequests(string[] origins)
+    {
+        return builder => builder.Run(async context =>
+        {
+            context.Response.StatusCode = 204;
+            context.Response.Headers.Append("Access-Control-Allow-Origin", string.Join(",", origins));
+            context.Response.Headers.Append("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+
+            await Task.CompletedTask;
+        });
     }
 }

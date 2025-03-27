@@ -1,9 +1,10 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using PizzaAI.types;
 using System.ComponentModel.DataAnnotations;
 using System.Text.RegularExpressions;
+
+using PizzaAI.types;
 
 namespace PizzaAI
 {
