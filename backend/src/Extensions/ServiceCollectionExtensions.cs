@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
     )
     {
         services.AddCustomCors();
+        services.ConfigureHTTPStrictTransportSecurity(environment);
         services.AddSecureDataProtection(environment, config);
         services.AddCustomAuthentication();
         services.AddCustomuthorization();
@@ -27,7 +28,8 @@ public static class ServiceCollectionExtensions
         services.ConfigureApiBehaviorOptions();
         services.ConfigureCustomApiBehavior();
         services.AddJsonOptions();
-        services.ConfigureHTTPStrictTransportSecurity(environment);
+        services.AddHttpClient();
+        services.AddScoped<IOpenAIService, OpenAIService>();
         return services;
     }
 
@@ -193,11 +195,11 @@ public static class ServiceCollectionExtensions
             options.IncludeSubDomains = true;
             options.MaxAge = TimeSpan.FromDays(365);
         });
-        services.AddHttpsRedirection(options =>
+        /*services.AddHttpsRedirection(options =>
         {
             options.RedirectStatusCode = StatusCodes.Status308PermanentRedirect;
             options.HttpsPort = 443;
-        });
+        });*/
 
         return services;
     }

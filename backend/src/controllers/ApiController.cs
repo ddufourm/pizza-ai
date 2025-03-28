@@ -1,6 +1,6 @@
 namespace PizzaAI
 {
-    public static class Api
+    public static class ApiController
     {
         public static WebApplication InitializeAPI(this WebApplication app, IConfiguration configuration)
         {

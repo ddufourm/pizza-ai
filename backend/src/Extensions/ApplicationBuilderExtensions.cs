@@ -8,12 +8,13 @@ public static class ApplicationBuilderExtensions
     public static WebApplication Initialize(this WebApplication app, IWebHostEnvironment env, IConfiguration config)
     {
         app.UseSecurityMiddlewarePipeline();
+        app.ConfigureHTTPStrictTransportSecurity(env);
+        app.UseProductionSecurityHeaders(env);
+        app.MapCorsPreflightRequests();
         app.UseCustomStaticFiles(env, config);
         app.MapSpaFallback(env);
-        app.UseProductionSecurityHeaders(env);
         app.SecureHiddenFilesAndFolder();
-        app.SetMapOpenApi(env);
-        app.ConfigureHTTPStrictTransportSecurity(env);
+        if (env.IsDevelopment()) app.MapOpenApi();
 
         return app;
     }
@@ -29,10 +30,14 @@ public static class ApplicationBuilderExtensions
                     [".webmanifest"] = "application/manifest+json",
                     [".wasm"] = "application/wasm"
                 }
+            },
+            OnPrepareResponse = ctx =>
+            {
+                ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=31536000, immutable");
             }
         };
-        app.UseStaticFiles(options);
         app.UseSecurityHeaders(env, config);
+        app.UseStaticFiles(options);
 
         return app;
     }
@@ -41,7 +46,7 @@ public static class ApplicationBuilderExtensions
     {
         app.Use(async (context, next) =>
         {
-            string path = context.Request.Path.Value.ToLowerInvariant();
+            string path = context?.Request?.Path.Value?.ToLowerInvariant() ?? "";
 
             // Folders list to block
             string[] blockedDirectories = { "/bitkeeper", "/.git", "/.svn" };
@@ -50,8 +55,11 @@ public static class ApplicationBuilderExtensions
             {
                 if (path.StartsWith(dir))
                 {
-                    context.Response.StatusCode = 403; // Accès interdit
-                    await context.Response.WriteAsync("Access to this resource is forbidden.");
+                    if (context is not null && context.Response != null)
+                    {
+                        context.Response.StatusCode = 403; // Accès interdit
+                        await context.Response.WriteAsync("Access to this resource is forbidden.");
+                    }
                     return;
                 }
             }
@@ -86,6 +94,7 @@ public static class ApplicationBuilderExtensions
             context.Response.Headers.Append("Content-Security-Policy", string.Join(" ", policies));
             context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
             context.Response.Headers.Append("X-Frame-Options", "DENY");
+            context.Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
             await next();
         });
     }
@@ -137,18 +146,14 @@ public static class ApplicationBuilderExtensions
             .UseAuthorization();
     }
 
-    public static WebApplication SetMapOpenApi(this WebApplication app, IWebHostEnvironment env)
+    public static IApplicationBuilder MapCorsPreflightRequests(this WebApplication app)
     {
-        if (!env.IsDevelopment()) return app;
-        // Configure OpenAPI in development
-        app.MapOpenApi();
-
-        return app;
-    }
-
-    public static IApplicationBuilder MapCorsPreflightRequests(this WebApplication app, string[] allowedOrigins)
-    {
-        return app.MapWhen(IsPreflightRequest, HandlePreflightRequests(allowedOrigins));
+        var corsOrigins = Environment.GetEnvironmentVariable("CORS_ORIGINS")?.Split(',') ?? [];
+        if (corsOrigins.Length == 0)
+        {
+            throw new InvalidOperationException("Aucune origine CORS configurée !");
+        }
+        return app.MapWhen(IsPreflightRequest, HandlePreflightRequests(corsOrigins));
     }
 
     private static bool IsPreflightRequest(HttpContext context)
@@ -172,8 +177,9 @@ public static class ApplicationBuilderExtensions
     public static IApplicationBuilder ConfigureHTTPStrictTransportSecurity(this WebApplication app, IWebHostEnvironment env)
     {
         if (env.IsDevelopment()) return app;
+        app.UseHstsExceptionHandler();
         app.UseHsts();
-        app.UseHttpsRedirection();
+        //app.UseHttpsRedirection();
 
         return app;
     }
